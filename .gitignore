@@ -62,3 +62,6 @@ sample/
 
 # vim temporary files
 *~
+
+# MAC OS temporary files
+.DS_Store
