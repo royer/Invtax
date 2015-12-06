@@ -51,6 +51,8 @@ class SecurityStatement(object):
 			avgprice = self.cost / self.shares
 			deductcost = avgprice * shares
 			self.cost -= deductcost
+			if self.cost < 0.00001 and self.cost > -0.00001 :
+				self.cost = 0.0
 		self.shares -= shares
 
 		#return amount - deductcost
@@ -242,12 +244,17 @@ argParse.add_argument("qiffile", help='the transcation file(.qif) file',\
 argParse.add_argument("outfile",help="the output file",\
 		nargs='?', type=argparse.FileType('w'),default=sys.stdout)
 argParse.add_argument("-y", help="only output this year",type=int)
-
+argParse.add_argument("-a", nargs='?',type=bool, const=True,\
+		help="view all sold out secrities in the statment")
+argParse.add_argument("-S","--sum", nargs='?',type=bool, const=True, \
+		help="sum total cost at the end of each statment")
 args = argParse.parse_args()
 
 qif = QifParser.parse(args.qiffile)
 
-
+whichyear = args.y
+viewall = args.a
+viewsum = args.sum
 
 statements = Statements(s_type = 'yearly')
 
@@ -264,6 +271,7 @@ for ac in qif.get_accounts():
 				statements.buy(tr.security, tr.quantity, tr.amount, tr.date)
 			elif action == 'SELL' or \
 					action == 'SELL TO OPEN' or \
+					action == 'SELL TO CLOSE' or \
 					action == 'SELLX':
 				statements.sell(tr.security, tr.quantity, tr.amount, tr.date)
 			else:
@@ -271,4 +279,20 @@ for ac in qif.get_accounts():
 
 #print str(qif)
 
-print (statements)
+#print (statements)
+sorted_s = sorted(statements._statements.items(), key = operator.itemgetter(0))
+for s in sorted_s:
+	if whichyear !=None and (whichyear != s[1]._date.year):
+		continue
+	print (s[1]._date)
+	summaxcost = 0.0
+	for one_s in s[1]._securities.values():
+		if viewall != None or (one_s.cost != 0.0):
+			print (one_s)
+			summaxcost += one_s.cost
+	if viewsum == True:
+		print ("----------------------------------------------------")
+		print ("sum cost:" + "%.2f" % (summaxcost))
+
+	print ("")
+
