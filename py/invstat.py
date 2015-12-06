@@ -31,6 +31,7 @@ class SecurityStatement(object):
 		self.shares = 0.0
 		self.cost = 0.0
 		self.maxcost = 0.0
+		self.sellamount = 0.0
 	
 	def __str__(self):
 		return '%s, %.3f, %.2f, %.2f' % (self.name, self.shares, \
@@ -43,18 +44,37 @@ class SecurityStatement(object):
 			self.maxcost = self.cost
 	
 	def sell(self, shares, amount):
+		if self.shares <= 0: #for short sell or option's sell to open operator
+			avgprice = 0.0
+			self.sellamount += amount
+		else:
+			avgprice = self.cost / self.shares
+			deductcost = avgprice * shares
+			self.cost -= deductcost
+		self.shares -= shares
+
+		#return amount - deductcost
+
+
+	def sell_to_open(self, shares, amount):
+		self.shares -= shares
+		self.cost -= amount
+		if self.cost < self.maxcost:
+			self.maxcost = self.cost
+
+	def buy_to_close(self, shares, amount):
 		avgprice = self.cost / self.shares
 		deductcost = avgprice * shares
-		self.shares -= shares
-		self.cost -= deductcost
-		if (self.shares < 0):
-			raise RuntimeError(six.u("%s hold shares less 0" % (self.name)))
-		if (self.cost < -0.01):
-			raise RuntimeError(six.u("%s hold cost(%.2f) less 0" % (self.name, self.cost)))
-
-		return amount - deductcost
+		self.shares += shares
+		self.cost += deductcost
+		if (self.shares > 0):
+			raise RuntimeError(six.u("%s hold shares great 0 is impossible for short" % (self.name)))
+		if (self.cost > 0.01):
+			raise RuntimeError(six.u("%s hold cost(%.2f) great 0 is impossible for short" % (self.name, self.cost)))
 
 
+
+        
 
 class Statement(object):
 
@@ -73,9 +93,28 @@ class Statement(object):
 		ss.buy(shares,amount)
 
 	def sell(self, name, shares, amount):
+		ss = None
 		if name not in self._securities:
-			raise RuntimeError(six.u("sell a seciruty before buy"))
-		self._securities[name].sell(shares,amount)
+			ss = SecurityStatement(name)
+			self._securities[name] = ss
+		else:
+			ss = self._securities[name]
+		ss.sell(shares,amount)
+
+	def sell_to_open(self, name, shares, amount):
+		ss = None
+		if name not in self.securities:
+			ss = SecurityStatement(name)
+			self._securities[name] = ss
+		else:
+			ss = self._securities[name]
+		ss.sell_to_open( shares, amount)
+
+	def buy_to_close(self, name, shares, amount):
+		if name not in self._securities:
+			raise RuntimeError(six.u("buy to close has no secrity"))
+		self._securities[name].buy_to_close(shares, amount)
+
 
 	def __str__(self):
 		res = []
@@ -194,6 +233,7 @@ class Statements(object):
 		statement.sell(security_name, shares, amount)
 
 
+
 Securities = []
 
 argParse = argparse.ArgumentParser(description='Generate security holding statement')
@@ -219,9 +259,11 @@ for ac in qif.get_accounts():
 			action = tr.action.upper()
 
 			if action == 'BUY' or \
+				action == 'BUY TO CLOSE' or \
 				action == 'BUY TO OPEN':
 				statements.buy(tr.security, tr.quantity, tr.amount, tr.date)
 			elif action == 'SELL' or \
+					action == 'SELL TO OPEN' or \
 					action == 'SELLX':
 				statements.sell(tr.security, tr.quantity, tr.amount, tr.date)
 			else:
